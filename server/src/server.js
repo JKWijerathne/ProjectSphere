@@ -1,10 +1,17 @@
+import express from 'express';
+import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import app from './app.js';
 
 dotenv.config();
-
-const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+// Connect to database then start server
+const connectionString = process.env.MONGO_URI;
+mongoose.connect(connectionString).then(() => {
+  console.log("Connected to MongoDB");
+}).catch((error) => {
+  console.log("Error connecting to MongoDB", error);
+}
+);
+app.listen(5000, () => {
+  console.log("Server running in port 5000");
 });
