@@ -75,7 +75,7 @@ export const getProjects = async (req, res) => {
         }
 
         const projects = await Project.find(query)
-            .populate('owner', 'name email') // show owner name
+            //.populate('owner', 'name email') // show owner name
             .sort({ createdAt: -1 }); // newest first
 
         res.json({ success: true, projects });
@@ -90,7 +90,7 @@ export const getProjectById = async (req, res) => {
         // TEMPORARY MOCK FOR TESTING (Remove when Member 4 is done)
         req.user = { _id: "64b5f8e91234567890abcdef" };
         const project = await Project.findById(req.params.id)
-            .populate('owner', 'name email');
+        //.populate('owner', 'name email');
 
         if (!project) {
             return res.status(404).json({ success: false, error: 'Project not found' });
@@ -203,6 +203,8 @@ export const deleteProject = async (req, res) => {
 // GET /my-projects - Get logged in student's projects
 export const getMyProjects = async (req, res) => {
     try {
+        //TEMP MOCK FOR TESTING (Remove when Member 4 is done)
+        req.user = { _id: "64b5f8e91234567890abcdef" };
         const projects = await Project.find({ owner: req.user._id })
             .sort({ createdAt: -1 });
 
