@@ -1,5 +1,5 @@
-// User controller - handles profile, follow/unfollow operations
 import User from '../models/userModel.js';
+import eventEmitter from '../events/eventEmitter.js';
 import { sendResponse, sendError } from '../utils/response.js';
 
 // Get user profile by ID
@@ -29,7 +29,7 @@ export const getUserProfile = async (req, res) => {
   }
 };
 
-// Follow a user
+// Follow/Unfollow (toggle) a user - emits UserFollowed when follow occurs
 export const followUser = async (req, res) => {
   try {
     // Validate ObjectId format
@@ -37,45 +37,61 @@ export const followUser = async (req, res) => {
       return sendError(res, 'Invalid user ID format', 400);
     }
 
-    // Check if trying to follow yourself
-    if (req.params.id === req.user._id.toString()) {
+    const targetUserId = req.params.id;
+    const currentUserId = req.user._id;
+
+    // Prevent self-following
+    if (targetUserId.toString() === currentUserId.toString()) {
       return sendError(res, 'You cannot follow yourself', 400);
     }
 
-    // Find both users
-    const userToFollow = await User.findById(req.params.id);
-    const currentUser = await User.findById(req.user._id);
+    const targetUser = await User.findById(targetUserId);
+    const currentUser = await User.findById(currentUserId);
 
-    if (!userToFollow) {
+    if (!targetUser) {
       return sendError(res, 'User not found', 404);
     }
 
-    // Check if already following
-    if (currentUser.following.includes(userToFollow._id)) {
-      return sendError(res, 'You are already following this user', 400);
+    const isFollowing = currentUser.following.includes(targetUserId);
+    let followed = false;
+
+    if (!isFollowing) {
+      // Follow
+      currentUser.following.push(targetUserId);
+      targetUser.followers.push(currentUserId);
+
+      await currentUser.save();
+      await targetUser.save();
+      followed = true;
+
+      // Emit UserFollowed event
+      eventEmitter.emit('UserFollowed', { followedUser: targetUser, follower: currentUser });
+    } else {
+      // Unfollow
+      currentUser.following = currentUser.following.filter(
+        id => id.toString() !== targetUserId.toString()
+      );
+      targetUser.followers = targetUser.followers.filter(
+        id => id.toString() !== currentUserId.toString()
+      );
+
+      await currentUser.save();
+      await targetUser.save();
+      followed = false;
     }
-
-    // Add to following and followers lists
-    currentUser.following.push(userToFollow._id);
-    userToFollow.followers.push(currentUser._id);
-
-    // Save both users
-    await currentUser.save();
-    await userToFollow.save();
-
-    // TODO: Create notification (Member 6 will implement)
-    // eventEmitter.emit('UserFollowed', { follower: currentUser, following: userToFollow });
 
     sendResponse(res, 200, {
       success: true,
-      message: 'User followed successfully'
+      followed,
+      followersCount: targetUser.followers.length,
+      followingCount: currentUser.following.length
     });
   } catch (error) {
     sendError(res, error.message, 500);
   }
 };
 
-// Unfollow a user
+// Unfollow a user (explicit) - kept for backward-compatible routes
 export const unfollowUser = async (req, res) => {
   try {
     // Validate ObjectId format
@@ -172,4 +188,5 @@ export const getUserFollowing = async (req, res) => {
   } catch (error) {
     sendError(res, error.message, 500);
   }
+};
 };

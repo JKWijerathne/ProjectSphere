@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema(
     {
@@ -61,6 +62,44 @@ const userSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+// Virtual field for confirming password during registration
+userSchema.virtual('confirmPassword')
+    .get(function() {
+        return this._confirmPassword;
+    })
+    .set(function(value) {
+        this._confirmPassword = value;
+    });
+
+// Validate that password and confirmPassword match
+userSchema.pre('validate', function(next) {
+    if (this.isModified('password') && this.confirmPassword !== undefined) {
+        if (this.password !== this.confirmPassword) {
+            this.invalidate('confirmPassword', 'Passwords do not match');
+        }
+    }
+    next();
+});
+
+// Hash the password before saving
+userSchema.pre('save', async function(next) {
+    if (!this.isModified('password')) return next();
+
+    try {
+        const salt = await bcrypt.genSalt(10);
+        this.password = await bcrypt.hash(this.password, salt);
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Helper method to compare passwords
+userSchema.methods.comparePassword = async function(candidatePassword) {
+    if (!this.password) return false; // If user signed up with Google OAuth only
+    return await bcrypt.compare(candidatePassword, this.password);
+};
 
 const User = mongoose.model('User', userSchema);
 export default User;

@@ -1,6 +1,7 @@
 // Admin controller - handles user and project management
 import User from '../models/userModel.js';
 import Project from '../models/projectModel.js';
+import eventEmitter from '../events/eventEmitter.js';
 import { sendResponse, sendError } from '../utils/response.js';
 
 // Get all users with optional filters
@@ -178,7 +179,20 @@ export const getAllProjects = async (req, res) => {
   }
 };
 
-// Update project status (Approve/Reject)
+// Get pending projects (convenience endpoint)
+export const getPendingProjects = async (req, res) => {
+  try {
+    const pendingProjects = await Project.find({ status: 'Pending' })
+      .populate('owner', 'name email profilePicture')
+      .sort({ createdAt: -1 });
+
+    sendResponse(res, 200, { success: true, projects: pendingProjects });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
+// Update project status (Approve/Reject) - generic endpoint
 export const updateProjectStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -204,12 +218,12 @@ export const updateProjectStatus = async (req, res) => {
       return sendError(res, 'Project not found', 404);
     }
 
-    // TODO: Create notification for project owner (Member 6 will implement)
-    // if (status === 'Approved') {
-    //   eventEmitter.emit('ProjectApproved', project);
-    // } else if (status === 'Rejected') {
-    //   eventEmitter.emit('ProjectRejected', project);
-    // }
+    // Emit events for Approved/Rejected to notify owner
+    if (status === 'Approved') {
+      eventEmitter.emit('ProjectApproved', { project, sender: req.user });
+    } else if (status === 'Rejected') {
+      eventEmitter.emit('ProjectRejected', { project, sender: req.user });
+    }
 
     sendResponse(res, 200, {
       success: true,
@@ -221,7 +235,49 @@ export const updateProjectStatus = async (req, res) => {
   }
 };
 
-// Delete project (admin can delete any project)
+// Approve project (explicit endpoint)
+export const approveProject = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id).populate('owner', 'name email');
+
+    if (!project) {
+      return sendError(res, 'Project not found', 404);
+    }
+
+    project.status = 'Approved';
+    await project.save();
+
+    // Emit ProjectApproved event
+    eventEmitter.emit('ProjectApproved', { project, sender: req.user });
+
+    sendResponse(res, 200, { success: true, message: 'Project approved successfully', project });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
+// Reject project (explicit endpoint)
+export const rejectProject = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id).populate('owner', 'name email');
+
+    if (!project) {
+      return sendError(res, 'Project not found', 404);
+    }
+
+    project.status = 'Rejected';
+    await project.save();
+
+    // Emit ProjectRejected event
+    eventEmitter.emit('ProjectRejected', { project, sender: req.user });
+
+    sendResponse(res, 200, { success: true, message: 'Project rejected successfully', project });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
+// Delete project (admin can delete any project) - keep admin-specific name
 export const deleteProjectAdmin = async (req, res) => {
   try {
     // Validate ObjectId format
@@ -246,7 +302,23 @@ export const deleteProjectAdmin = async (req, res) => {
   }
 };
 
-// Get dashboard statistics
+// Delete project (alias endpoint used by some routes) - kept to match incoming branch behavior
+export const deleteProject = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return sendError(res, 'Project not found', 404);
+    }
+
+    await project.deleteOne();
+    sendResponse(res, 200, { success: true, message: 'Project deleted successfully by Administrator' });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
+// Get dashboard statistics (dev version)
 export const getDashboardStats = async (req, res) => {
   try {
     // Count users by role
@@ -281,4 +353,49 @@ export const getDashboardStats = async (req, res) => {
   } catch (error) {
     sendError(res, error.message, 500);
   }
+};
+
+// Get admin dashboard (incoming branch) - includes recent projects
+export const getAdminDashboard = async (req, res) => {
+  try {
+    const [
+      studentCount,
+      recruiterCount,
+      approvedCount,
+      pendingCount,
+      rejectedCount,
+      recentProjects
+    ] = await Promise.all([
+      User.countDocuments({ role: 'Student' }),
+      User.countDocuments({ role: 'Recruiter' }),
+      Project.countDocuments({ status: 'Approved' }),
+      Project.countDocuments({ status: 'Pending' }),
+      Project.countDocuments({ status: 'Rejected' }),
+      Project.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate('owner', 'name email')
+    ]);
+
+    sendResponse(res, 200, {
+      success: true,
+      stats: {
+        totalUsers: {
+          students: studentCount,
+          recruiters: recruiterCount,
+          total: studentCount + recruiterCount
+        },
+        projects: {
+          approved: approvedCount,
+          pending: pendingCount,
+          rejected: rejectedCount,
+          total: approvedCount + pendingCount + rejectedCount
+        }
+      },
+      recentProjects
+    });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
 };
