@@ -2,7 +2,17 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { createProject, getProjects, getProjectById, updateProject, deleteProject, getMyProjects } from '../controllers/projectController.js';
+import { 
+  createProject, 
+  getProjects, 
+  getProjectById, 
+  updateProject, 
+  deleteProject, 
+  getMyProjects,
+  likeProject 
+} from '../controllers/projectController.js';
+import { protect } from '../middleware/authMiddleware.js';
+import { restrictTo } from '../middleware/roleMiddleware.js';
 
 const projectRouter = express.Router();
 
@@ -32,10 +42,20 @@ const uploadFields = upload.fields([
   { name: 'dbSchemaUrl', maxCount: 1 }
 ]);
 
-projectRouter.post('/', uploadFields, createProject);
+// Project routes protected by JWT auth
+projectRouter.use(protect);
+
+// Student specific actions
+projectRouter.post('/', restrictTo('Student'), uploadFields, createProject);
+projectRouter.get('/my-projects', restrictTo('Student'), getMyProjects);
+projectRouter.put('/:id', restrictTo('Student'), uploadFields, updateProject);
+projectRouter.delete('/:id', restrictTo('Student'), deleteProject);
+
+// Recruiter specific actions
+projectRouter.post('/:id/like', restrictTo('Recruiter'), likeProject);
+
+// Shared actions (Student, Lecturer, Recruiter)
 projectRouter.get('/', getProjects);
-projectRouter.get('/my-projects', getMyProjects);
 projectRouter.get('/:id', getProjectById);
-projectRouter.put('/:id', uploadFields, updateProject);
-projectRouter.delete('/:id', deleteProject);
+
 export default projectRouter;
