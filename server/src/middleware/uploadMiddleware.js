@@ -2,25 +2,25 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-// Ensure upload directory exists
-const uploadDir = 'uploads/';
+// Ensure temp upload directory exists (for Cloudinary uploads)
+const uploadDir = 'uploads/temp/';
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Set up disk storage
+// Disk storage (temporary before Cloudinary upload)
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
-// File filter to check for allowed image formats
-const fileFilter = (req, file, cb) => {
+// File filter (only images allowed)
+const fileFilter = (_req, file, cb) => {
   const filetypes = /jpeg|jpg|png|gif|webp/;
   const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
   const mimetype = filetypes.test(file.mimetype);
@@ -32,9 +32,19 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Export pre-configured multer instance
+// Memory storage (for direct Cloudinary upload without temp file)
+const memoryStorage = multer.memoryStorage();
+
+// Multer instance with disk storage (for Cloudinary workflow)
 export const upload = multer({
   storage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
+// Multer instance with memory storage (alternative for Cloudinary)
+export const uploadMemory = multer({
+  storage: memoryStorage,
   fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
