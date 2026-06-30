@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import passport from './config/passport.js';
+import authRoutes from './routes/authRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
@@ -17,6 +19,7 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(passport.initialize()); // Initialize Passport for OAuth
 app.use('/uploads', express.static('uploads'));
 
 // Basic Route
@@ -25,6 +28,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Routes Registration
+app.use('/api/auth', authRoutes); 
 app.use('/api/projects', projectRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);

@@ -14,7 +14,7 @@ export const hashPassword = async (password) => {
   }
 
   if (password.length > 128) {
-    throw new Error('Password too long'); // Prevent DoS attacks
+    throw new Error('Password too long');                   // Prevent DoS attacks
   }
 
   const saltRounds = 10;

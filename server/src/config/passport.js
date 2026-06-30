@@ -31,6 +31,12 @@ passport.use(
             // Link Google account to existing user
             user.googleId = profile.id;
             user.profilePicture = profile.photos[0]?.value || user.profilePicture;
+            
+            // Add 'google' to authProviders if not already present
+            if (!user.authProviders.includes('google')) {
+              user.authProviders.push('google');
+            }
+            
             await user.save();
             console.log('Linked Google account to existing user:', user.email);
           } else {
@@ -41,6 +47,7 @@ passport.use(
               googleId: profile.id,
               profilePicture: profile.photos[0]?.value || '',
               role: 'Student', // Default role for new OAuth users
+              authProviders: ['google'] // User signed up with Google
             });
             console.log('Created new user from Google OAuth:', user.email);
           }
