@@ -10,6 +10,11 @@ import {
   logout 
 } from '../controllers/authController.js';
 import { protect } from '../middleware/authMiddleware.js';
+import { 
+  validateRegister, 
+  validateLogin, 
+  validateUpdateProfile 
+} from '../validations/authValidation.js';
 import rateLimit from 'express-rate-limit';
 
 const authRouter = express.Router();
@@ -40,10 +45,10 @@ const registerLimiter = rateLimit({
 
 // Public routes - No authentication required
 // POST /api/auth/register - Register new user
-authRouter.post('/register', registerLimiter, register);
+authRouter.post('/register', registerLimiter, validateRegister, register);
 
 // POST /api/auth/login - Login with email and password
-authRouter.post('/login', authLimiter, login);
+authRouter.post('/login', authLimiter, validateLogin, login);
 
 // Google OAuth routes
 // GET /api/auth/google - Initiate Google OAuth flow
@@ -76,7 +81,7 @@ authRouter.get('/failure', (req, res) => {
 authRouter.get('/me', protect, getMe);
 
 // PUT /api/auth/profile - Update user profile
-authRouter.put('/profile', protect, updateProfile);
+authRouter.put('/profile', protect, validateUpdateProfile, updateProfile);
 
 // POST /api/auth/logout - Logout user (client-side token deletion)
 authRouter.post('/logout', protect, logout);

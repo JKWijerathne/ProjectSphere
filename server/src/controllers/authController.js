@@ -9,24 +9,13 @@ export const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
-    // Validate required fields
-    if (!name || !email || !password) {
-      return sendError(res, 'Please provide name, email and password', 400);
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return sendError(res, 'Invalid email format', 400);
-    }
-
     // Check if user already exists
     const userExists = await User.findOne({ email });
     if (userExists) {
       return sendError(res, 'User already exists with this email', 400);
     }
 
-    // Hash password (validation happens in hashPassword utility)
+    // Hash password
     const hashedPassword = await hashPassword(password);
 
     // Create user with hashed password and local auth provider
@@ -55,10 +44,6 @@ export const register = async (req, res) => {
       }
     });
   } catch (error) {
-    // Check for specific error types
-    if (error.message.includes('Password must be')) {
-      return sendError(res, error.message, 400);
-    }
     sendError(res, error.message, 500);
   }
 };
@@ -67,11 +52,6 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    // Validate required fields
-    if (!email || !password) {
-      return sendError(res, 'Please provide email and password', 400);
-    }
 
     // Find user with password field
     const user = await User.findOne({ email }).select('+password');
@@ -145,11 +125,6 @@ export const updateProfile = async (req, res) => {
   try {
     const { name, profilePicture } = req.body;
 
-    // Validate at least one field is provided
-    if (!name && !profilePicture) {
-      return sendError(res, 'Please provide at least one field to update', 400);
-    }
-
     // Find user
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -158,10 +133,6 @@ export const updateProfile = async (req, res) => {
 
     // Update fields
     if (name) {
-      // Validate name
-      if (name.trim().length < 2) {
-        return sendError(res, 'Name must be at least 2 characters', 400);
-      }
       user.name = name.trim();
     }
     
