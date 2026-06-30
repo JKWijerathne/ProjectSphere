@@ -1,6 +1,7 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import User from '../models/userModel.js';
+import { validateEmailForRole, getRoleFromEmail } from '../utils/emailDomainValidator.js';
 
 // Configure Google OAuth Strategy
 passport.use(
@@ -11,23 +12,46 @@ passport.use(
       callbackURL: '/api/auth/google/callback',
       proxy: true, // Trust proxy if behind one (e.g., Heroku)
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async (_accessToken, _refreshToken, profile, done) => {
       try {
-        // Log OAuth profile for debugging (remove in production)
+        const email = profile.emails?.[0]?.value;
+        
+        if (!email) {
+          return done(new Error('No email provided by Google'), null);
+        }
+
         console.log('Google OAuth Profile:', {
           id: profile.id,
-          email: profile.emails?.[0]?.value,
+          email: email,
           name: profile.displayName,
         });
+
+        // Auto-detect role from email domain
+        const detectedRole = getRoleFromEmail(email);
+        
+        if (!detectedRole) {
+          return done(new Error('Email domain not authorized. Please use your university or company email.'), null);
+        }
+
+        // Validate email domain for the detected role
+        const domainValidation = validateEmailForRole(email, detectedRole);
+        if (!domainValidation.valid) {
+          return done(new Error(domainValidation.message), null);
+        }
 
         // Check if user already exists with this Google ID
         let user = await User.findOne({ googleId: profile.id });
 
         if (!user) {
           // Check if user exists with the same email (link accounts)
-          user = await User.findOne({ email: profile.emails[0].value });
+          user = await User.findOne({ email });
 
           if (user) {
+            // Verify the role matches
+            if (user.role !== detectedRole) {
+              return done(new Error(`Email ${email} is registered as ${user.role}, but trying to access as ${detectedRole}`), null);
+            }
+
             // Link Google account to existing user
             user.googleId = profile.id;
             user.profilePicture = profile.photos[0]?.value || user.profilePicture;
@@ -43,13 +67,18 @@ passport.use(
             // Create new user with Google account
             user = await User.create({
               name: profile.displayName,
-              email: profile.emails[0].value,
+              email,
               googleId: profile.id,
               profilePicture: profile.photos[0]?.value || '',
-              role: 'Student', // Default role for new OAuth users
+              role: detectedRole, // Auto-assign role based on email domain
               authProviders: ['google'] // User signed up with Google
             });
-            console.log('Created new user from Google OAuth:', user.email);
+            console.log('Created new user from Google OAuth:', user.email, 'Role:', detectedRole);
+          }
+        } else {
+          // User exists with Google ID, verify role hasn't changed
+          if (user.role !== detectedRole) {
+            return done(new Error(`Account role mismatch for ${email}`), null);
           }
         }
 

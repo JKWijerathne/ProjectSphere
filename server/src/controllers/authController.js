@@ -3,11 +3,19 @@ import User from '../models/userModel.js';
 import { generateToken } from '../utils/jwt.js';
 import { hashPassword, comparePassword } from '../utils/hashPassword.js';
 import { sendResponse, sendError } from '../utils/response.js';
+import { validateEmailForRole } from '../utils/emailDomainValidator.js';
 
-// Register new user
+// Register new user (DEPRECATED - Use OTP flow instead)
+// This is kept for backward compatibility but should use /auth/register-otp
 export const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
+
+    // Validate email domain for role
+    const domainValidation = validateEmailForRole(email, role);
+    if (!domainValidation.valid) {
+      return sendError(res, domainValidation.message, 400);
+    }
 
     // Check if user already exists
     const userExists = await User.findOne({ email });

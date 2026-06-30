@@ -1,7 +1,9 @@
+// Authentication routes with Google OAuth support
 import express from 'express';
 import cors from 'cors';
 import passport from './config/passport.js';
 import authRoutes from './routes/authRoutes.js';
+import otpRoutes from './routes/otpRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
@@ -29,6 +31,7 @@ app.get('/api/health', (req, res) => {
 
 // Routes Registration
 app.use('/api/auth', authRoutes); 
+app.use('/api/otp', otpRoutes); // OTP verification routes
 app.use('/api/projects', projectRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
