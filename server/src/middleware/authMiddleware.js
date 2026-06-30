@@ -1,10 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/userModel.js';
 
-/**
- * Protect middleware - Verify JWT token and attach user to request
- * Use this middleware on routes that require authentication
- */
+// Protect middleware - Verify JWT token and attach user to request
 export const protect = async (req, res, next) => {
   let token;
 
@@ -17,10 +14,20 @@ export const protect = async (req, res, next) => {
       // Extract token from "Bearer <token>"
       token = req.headers.authorization.split(' ')[1];
 
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      // Additional token format validation
+      if (!token || token === 'null' || token === 'undefined') {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid token format',
+        });
+      }
 
-      // Get user from token (exclude password field)
+      // Verify token with algorithm restriction
+      const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+        algorithms: ['HS256']
+      });
+
+      // Get user from token (exclude sensitive fields)
       req.user = await User.findById(decoded.id).select('-password -__v');
 
       if (!req.user) {
@@ -66,10 +73,7 @@ export const protect = async (req, res, next) => {
   }
 };
 
-/**
- * Optional auth middleware - Attach user if token exists, but don't require it
- * Use this on routes that work differently for authenticated vs unauthenticated users
- */
+// Optional auth middleware - Attach user if token exists
 export const optionalAuth = async (req, res, next) => {
   let token;
 
@@ -79,11 +83,18 @@ export const optionalAuth = async (req, res, next) => {
   ) {
     try {
       token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(decoded.id).select('-password -__v');
+      
+      // Validate token format
+      if (token && token !== 'null' && token !== 'undefined') {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+          algorithms: ['HS256']
+        });
+        req.user = await User.findById(decoded.id).select('-password -__v');
+      } else {
+        req.user = null;
+      }
     } catch (error) {
       // If token is invalid or expired, just continue without user
-      console.log('Optional auth: Invalid token, continuing without user');
       req.user = null;
     }
   } else {
