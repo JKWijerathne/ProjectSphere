@@ -1,11 +1,9 @@
 import Project from '../models/projectModel.js';
-// Import event emitter from Member 6 later:
-// import eventEmitter from '../events/eventEmitter.js';
+import eventEmitter from '../events/eventEmitter.js';
 
+// POST /projects - Create a new project (Student only)
 export const createProject = async (req, res) => {
     try {
-        // TEMPORARY MOCK FOR TESTING (Remove when Member 4 is done)
-        req.user = { _id: "64b5f8e91234567890abcdef" };
         const { title, description, technologies, category, githubUrl } = req.body;
 
         let thumbnail = null;
@@ -47,11 +45,12 @@ export const createProject = async (req, res) => {
             thumbnail,
             diagrams,
             dbSchemaUrl,
-            owner: req.user._id, // comes from auth middleware (Member 4)
+            owner: req.user._id, // comes from auth middleware
             status: 'Pending'
         });
 
-        // eventEmitter.emit('ProjectCreated', project);
+        // Emit ProjectCreated event to notify Lecturers/Admins
+        eventEmitter.emit('ProjectCreated', { project, sender: req.user });
 
         res.status(201).json({ success: true, project });
     } catch (error) {
@@ -62,8 +61,6 @@ export const createProject = async (req, res) => {
 // GET /projects - Get all approved public projects
 export const getProjects = async (req, res) => {
     try {
-        // TEMPORARY MOCK FOR TESTING (Remove when Member 4 is done)
-        req.user = { _id: "64b5f8e91234567890abcdef" };
         const { search, category } = req.query;
         let query = { status: 'Approved' };
 
@@ -75,7 +72,7 @@ export const getProjects = async (req, res) => {
         }
 
         const projects = await Project.find(query)
-            //.populate('owner', 'name email') // show owner name
+            .populate('owner', 'name email profilePicture') // show owner details
             .sort({ createdAt: -1 }); // newest first
 
         res.json({ success: true, projects });
@@ -87,10 +84,10 @@ export const getProjects = async (req, res) => {
 // GET /projects/:id - Get single project
 export const getProjectById = async (req, res) => {
     try {
-        // TEMPORARY MOCK FOR TESTING (Remove when Member 4 is done)
-        req.user = { _id: "64b5f8e91234567890abcdef" };
         const project = await Project.findById(req.params.id)
-        //.populate('owner', 'name email');
+            .populate('owner', 'name email profilePicture')
+            .populate('likes', 'name email')
+            .populate('comments.user', 'name profilePicture');
 
         if (!project) {
             return res.status(404).json({ success: false, error: 'Project not found' });
@@ -102,11 +99,9 @@ export const getProjectById = async (req, res) => {
     }
 };
 
-// PUT /projects/:id - Update project
+// PUT /projects/:id - Update project (Owner Student only)
 export const updateProject = async (req, res) => {
     try {
-        // TEMPORARY MOCK FOR TESTING (Remove when Member 4 is done)
-        req.user = { _id: "64b5f8e91234567890abcdef" };
         const project = await Project.findById(req.params.id);
 
         if (!project) {
@@ -177,11 +172,9 @@ export const updateProject = async (req, res) => {
     }
 };
 
-// DELETE /projects/:id - Delete project
+// DELETE /projects/:id - Delete project (Owner Student only)
 export const deleteProject = async (req, res) => {
     try {
-        // TEMPORARY MOCK FOR TESTING (Remove when Member 4 is done)
-        req.user = { _id: "64b5f8e91234567890abcdef" };
         const project = await Project.findById(req.params.id);
 
         if (!project) {
@@ -203,12 +196,42 @@ export const deleteProject = async (req, res) => {
 // GET /my-projects - Get logged in student's projects
 export const getMyProjects = async (req, res) => {
     try {
-        //TEMP MOCK FOR TESTING (Remove when Member 4 is done)
-        req.user = { _id: "64b5f8e91234567890abcdef" };
         const projects = await Project.find({ owner: req.user._id })
             .sort({ createdAt: -1 });
 
         res.json({ success: true, projects });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// POST /projects/:id/like - Like/Unlike a project (Recruiter only)
+export const likeProject = async (req, res) => {
+    try {
+        const project = await Project.findById(req.params.id);
+        if (!project) {
+            return res.status(404).json({ success: false, error: 'Project not found' });
+        }
+
+        const likeIndex = project.likes.indexOf(req.user._id);
+        let liked = false;
+
+        if (likeIndex === -1) {
+            // Like project
+            project.likes.push(req.user._id);
+            await project.save();
+            liked = true;
+
+            // Emit ProjectLiked event (the event handler in notificationEvents will save the Notification)
+            eventEmitter.emit('ProjectLiked', { project, sender: req.user });
+        } else {
+            // Unlike project
+            project.likes.splice(likeIndex, 1);
+            await project.save();
+            liked = false;
+        }
+
+        res.json({ success: true, liked, likesCount: project.likes.length });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
