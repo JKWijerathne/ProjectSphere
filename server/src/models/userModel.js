@@ -11,11 +11,29 @@ const userSchema = new mongoose.Schema(
             required: true,
             unique: true,
         },
+        password: {
+            type: String,
+            // All roles (Student, Lecturer, Recruiter) can use email+password login.
+            // Not required at schema level because a user might only ever use Google OAuth
+            // and never set a password. Required only when registering via the local
+            // (email+password) route — enforced in authController/authService, not here.
+            select: false, // never return password field by default in queries
+        },
         googleId: {
             type: String,
-            // Required for Member 4's Google OAuth implementation
+            // Set when a user logs in/signs up via Google OAuth (Member 4).
+            // A user can have BOTH googleId and password set if they linked both methods.
             unique: true,
-            sparse: true,
+            sparse: true, // allows multiple users with no googleId (local-only users)
+        },
+        authProviders: {
+            type: [String],
+            enum: ['google', 'local'],
+            default: [],
+            // Tracks which login method(s) this account supports.
+            // e.g. ['local'] = email+password only
+            //      ['google'] = Google OAuth only
+            //      ['local', 'google'] = user can log in either way (same account linked)
         },
         profilePicture: {
             type: String,
