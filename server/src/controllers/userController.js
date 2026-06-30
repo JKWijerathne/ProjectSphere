@@ -189,4 +189,3 @@ export const getUserFollowing = async (req, res) => {
     sendError(res, error.message, 500);
   }
 };
-};

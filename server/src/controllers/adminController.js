@@ -398,4 +398,3 @@ export const getAdminDashboard = async (req, res) => {
     sendError(res, error.message, 500);
   }
 };
-};
