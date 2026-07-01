@@ -27,7 +27,7 @@ const authRouter = express.Router();
 // Rate limiter for auth routes - prevent brute force attacks
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per window
+  max: 100, // 100 requests per window (increased from 5)
   message: {
     success: false,
     error: 'Too many authentication attempts. Please try again after 15 minutes.'
@@ -39,7 +39,7 @@ const authLimiter = rateLimit({
 // Rate limiter for registration - prevent spam
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // 3 registrations per hour
+  max: 50, // 50 registrations per hour (increased from 3)
   message: {
     success: false,
     error: 'Too many accounts created. Please try again after 1 hour.'

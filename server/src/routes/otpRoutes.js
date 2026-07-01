@@ -18,7 +18,7 @@ const otpRouter = express.Router();
 // Rate limiter for OTP registration (prevent spam)
 const otpRegisterLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // 3 registration attempts per hour per IP
+  max: 50, // 50 registration attempts per hour per IP (increased from 3)
   message: {
     success: false,
     error: 'Too many registration attempts. Please try again after 1 hour.'
@@ -30,7 +30,7 @@ const otpRegisterLimiter = rateLimit({
 // Rate limiter for OTP verification (prevent brute force)
 const otpVerifyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 verification attempts per 15 minutes
+  max: 100, // 100 verification attempts per 15 minutes (increased from 10)
   message: {
     success: false,
     error: 'Too many verification attempts. Please try again after 15 minutes.'
@@ -42,7 +42,7 @@ const otpVerifyLimiter = rateLimit({
 // Rate limiter for resend OTP (prevent spam)
 const otpResendLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 3, // 3 resend attempts per 5 minutes
+  max: 20, // 20 resend attempts per 5 minutes (increased from 3)
   message: {
     success: false,
     error: 'Too many resend requests. Please wait 5 minutes before trying again.'
