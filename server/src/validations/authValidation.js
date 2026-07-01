@@ -37,7 +37,7 @@ export const validateRegister = [
     .notEmpty()
     .withMessage('Email is required')
     .isEmail()
-    .withMessage('Please provide a valid email address')
+    .withMessage('Please use a verified email address to continue')
     .normalizeEmail() // Normalize email format
     .isLength({ max: 100 })
     .withMessage('Email must not exceed 100 characters'),
@@ -70,7 +70,7 @@ export const validateLogin = [
     .notEmpty()
     .withMessage('Email is required')
     .isEmail()
-    .withMessage('Please provide a valid email address')
+    .withMessage('Please use a verified email address to continue')
     .normalizeEmail(),
 
   // Password validation
@@ -126,6 +126,44 @@ export const validateUpdateRole = [
     .isIn(['Student', 'Lecturer', 'Recruiter'])
     .withMessage('Role must be Student, Lecturer, or Recruiter')
     .escape(),
+
+  handleValidationErrors
+];
+
+// OTP verification validation
+export const validateOTPVerification = [
+  // Email validation
+  body('email')
+    .trim()
+    .notEmpty()
+    .withMessage('Email is required')
+    .isEmail()
+    .withMessage('Please use a verified email address to continue')
+    .normalizeEmail(),
+
+  // OTP validation
+  body('otp')
+    .trim()
+    .notEmpty()
+    .withMessage('OTP code is required')
+    .isLength({ min: 6, max: 6 })
+    .withMessage('OTP code must be exactly 6 digits')
+    .isNumeric()
+    .withMessage('OTP code must contain only numbers'),
+
+  handleValidationErrors
+];
+
+// Resend OTP validation
+export const validateResendOTP = [
+  // Email validation
+  body('email')
+    .trim()
+    .notEmpty()
+    .withMessage('Email is required')
+    .isEmail()
+    .withMessage('Please use a verified email address to continue')
+    .normalizeEmail(),
 
   handleValidationErrors
 ];

@@ -1,19 +1,31 @@
-import express from 'express';
-import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import dns from 'dns';
+
+// Load environment variables FIRST before any other imports
+dotenv.config();
+
+// Debug: Log if Google OAuth credentials are loaded
+console.log('Environment check:', {
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? 'Loaded ✓' : 'Missing ✗',
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? 'Loaded ✓' : 'Missing ✗',
+  MONGO_URI: process.env.MONGO_URI ? 'Loaded ✓' : 'Missing ✗',
+  JWT_SECRET: process.env.JWT_SECRET ? 'Loaded ✓' : 'Missing ✗',
+});
+
+import mongoose from 'mongoose';
 import app from './app.js';
 
 dns.setServers(['8.8.8.8', '1.1.1.1']);
-dotenv.config();
+
 // Connect to database then start server
 const connectionString = process.env.MONGO_URI;
 mongoose.connect(connectionString).then(() => {
   console.log("Connected to MongoDB");
 }).catch((error) => {
   console.log("Error connecting to MongoDB", error);
-}
-);
-app.listen(5000, () => {
-  console.log("Server running in port 5000");
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

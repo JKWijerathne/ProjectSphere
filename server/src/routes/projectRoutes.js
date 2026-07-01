@@ -21,7 +21,11 @@ const uploadFields = upload.fields([
   { name: 'dbSchemaUrl', maxCount: 1 }
 ]);
 
-// Project routes protected by JWT auth
+// Public routes — browse approved projects without authentication
+projectRouter.get('/', getProjects);
+projectRouter.get('/:id', getProjectById);
+
+// All routes below require JWT auth
 projectRouter.use(protect);
 
 // Student specific actions
@@ -32,9 +36,5 @@ projectRouter.delete('/:id', restrictTo('Student'), deleteProject);
 
 // Recruiter specific actions
 projectRouter.post('/:id/like', restrictTo('Recruiter'), likeProject);
-
-// Shared actions (Student, Lecturer, Recruiter)
-projectRouter.get('/', getProjects);
-projectRouter.get('/:id', getProjectById);
 
 export default projectRouter;

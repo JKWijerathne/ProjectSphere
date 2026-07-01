@@ -64,7 +64,7 @@ export const login = async (req, res) => {
     // Find user with password field
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
-      return sendError(res, 'Invalid email or password', 401);
+      return sendError(res, 'invalid username or password', 401);
     }
 
     // Check if user has password (supports local auth)
@@ -80,7 +80,7 @@ export const login = async (req, res) => {
     // Verify password
     const isMatch = await comparePassword(password, user.password);
     if (!isMatch) {
-      return sendError(res, 'Invalid email or password', 401);
+      return sendError(res, 'invalid username or password', 401);
     }
 
     // Generate JWT token
@@ -172,16 +172,20 @@ export const googleCallback = (req, res) => {
   try {
     // User is attached by passport middleware
     if (!req.user) {
-      return res.redirect(`${process.env.CLIENT_URL}/auth/failure`);
+      const frontendUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent('Authentication failed')}`);
     }
 
     // Generate JWT token
     const token = generateToken(req.user._id);
 
     // Redirect to frontend with token
-    res.redirect(`${process.env.CLIENT_URL}/auth/success?token=${token}`);
+    const frontendUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}/auth/google/callback?token=${token}`);
   } catch (error) {
-    res.redirect(`${process.env.CLIENT_URL}/auth/failure`);
+    console.error('Google callback error:', error);
+    const frontendUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}/login?error=${encodeURIComponent('Authentication error occurred')}`);
   }
 };
 

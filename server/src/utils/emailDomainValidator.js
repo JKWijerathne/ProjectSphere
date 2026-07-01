@@ -1,4 +1,4 @@
-﻿// Email domain validation for role-based registration
+// Email domain validation for role-based registration
 
 // Allowed domains for each role type
 const ALLOWED_RECRUITER_DOMAINS = [
@@ -36,21 +36,21 @@ const extractDomain = (email) => {
 
 export const validateEmailForRole = (email, role) => {
   const normalizedEmail = extractDomain(email);
-  if (!normalizedEmail) return { valid: false, message: 'Invalid email format' };
+  if (!normalizedEmail) return { valid: false, message: 'Please use a verified email address to continue' };
 
   switch (role) {
     case 'Student':
       if (normalizedEmail.endsWith(STUDENT_DOMAIN)) return { valid: true };
-      return { valid: false, message: Student accounts must use university email () };
+      return { valid: false, message: 'Please use a verified email address to continue' };
     case 'Lecturer':
       if (normalizedEmail.endsWith(LECTURER_DOMAIN) && !normalizedEmail.endsWith(STUDENT_DOMAIN)) return { valid: true };
-      return { valid: false, message: Lecturer accounts must use university email (, not ) };
+      return { valid: false, message: 'Please use a verified email address to continue' };
     case 'Recruiter':
       const domainPart = normalizedEmail.split('@')[1];
       if (ALLOWED_RECRUITER_DOMAINS.includes(domainPart)) return { valid: true };
-      return { valid: false, message: 'Recruiter email domain is not in the approved list of companies' };
+      return { valid: false, message: 'Please use a verified email address to continue' };
     default:
-      return { valid: false, message: 'Invalid role specified' };
+      return { valid: false, message: 'Please use a verified email address to continue' };
   }
 };
 

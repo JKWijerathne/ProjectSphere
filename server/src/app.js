@@ -18,9 +18,17 @@ initNotificationEvents();
 
 const app = express();
 
+// CORS Configuration - Allow frontend origin
+const corsOptions = {
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For form data
 app.use(passport.initialize()); // Initialize Passport for OAuth
 app.use('/uploads', express.static('uploads'));
 
@@ -36,5 +44,65 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/users', userRoutes);
+
+// Error handling middleware - must be after routes
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+
+  // Passport authentication errors
+  if (err.name === 'AuthenticationError') {
+    return res.status(401).json({
+      success: false,
+      error: err.message || 'Authentication failed'
+    });
+  }
+
+  // Validation errors
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      success: false,
+      error: err.message
+    });
+  }
+
+  // JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid token'
+    });
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      error: 'Token expired'
+    });
+  }
+
+  // MongoDB errors
+  if (err.name === 'MongoError' || err.name === 'MongoServerError') {
+    if (err.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Duplicate entry. This record already exists.'
+      });
+    }
+  }
+
+  // Default error
+  res.status(err.statusCode || 500).json({
+    success: false,
+    error: err.message || 'Internal server error'
+  });
+});
+
+// 404 handler - must be last
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Route not found'
+  });
+});
 
 export default app;
