@@ -4,7 +4,8 @@ import {
   approveProject, 
   rejectProject, 
   deleteProject, 
-  getAdminDashboard 
+  getAdminDashboard,
+  deleteUser,
 } from '../controllers/adminController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { restrictTo } from '../middleware/roleMiddleware.js';
@@ -28,5 +29,8 @@ adminRouter.delete('/projects/:id', deleteProject);
 
 // GET /api/admin/dashboard - Fetch dashboard statistics
 adminRouter.get('/dashboard', getAdminDashboard);
+
+// DELETE /api/admin/users/:id - Delete user and all associated data
+adminRouter.delete('/users/:id', deleteUser);
 
 export default adminRouter;

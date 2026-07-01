@@ -8,6 +8,7 @@ import projectRoutes from './routes/projectRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import statsRoutes from './routes/statsRoutes.js';
 
 // Import and register event listeners
 import { initNotificationEvents } from './events/notificationEvents.js';
@@ -44,6 +45,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Error handling middleware - must be after routes
 app.use((err, req, res, next) => {

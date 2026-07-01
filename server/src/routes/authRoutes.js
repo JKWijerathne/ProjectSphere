@@ -5,15 +5,20 @@ import {
   register, 
   login, 
   getMe, 
-  updateProfile, 
+  updateProfile,
+  changePassword,
+  updateProfilePicture,
   googleCallback,
-  logout 
+  logout,
+  deleteMyAccount,
 } from '../controllers/authController.js';
 import { protect } from '../middleware/authMiddleware.js';
+import { upload } from '../middleware/uploadMiddleware.js';
 import { 
   validateRegister, 
   validateLogin, 
-  validateUpdateProfile 
+  validateUpdateProfile,
+  validateChangePassword
 } from '../validations/authValidation.js';
 import rateLimit from 'express-rate-limit';
 
@@ -56,20 +61,25 @@ const isGoogleConfigured = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CL
 if (isGoogleConfigured) {
   // GET /api/auth/google - Initiate Google OAuth flow
   authRouter.get('/google', 
-    passport.authenticate('google', { 
-      scope: ['profile', 'email'],
-      session: false // We use JWT, not sessions
-    })
+    (req, res, next) => {
+      const origin = req.query.origin || process.env.CLIENT_URL || 'http://localhost:5173';
+      passport.authenticate('google', { 
+        scope: ['profile', 'email'],
+        session: false, // We use JWT, not sessions
+        state: origin // roundtrip origin via state parameter
+      })(req, res, next);
+    }
   );
 
   // GET /api/auth/google/callback - Google OAuth callback
   authRouter.get('/google/callback',
     (req, res, next) => {
       passport.authenticate('google', { session: false }, (err, user, info) => {
+        const state = req.query.state;
+        const frontendUrl = state || process.env.CLIENT_URL || 'http://localhost:5173';
         if (err) {
           // Error occurred during authentication
           console.error('Google OAuth authentication error:', err);
-          const frontendUrl = process.env.CLIENT_URL || 'http://localhost:5173';
           return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message || 'Authentication failed')}`);
         }
         
@@ -77,7 +87,6 @@ if (isGoogleConfigured) {
           // Authentication failed (no user returned)
           const errorMessage = info?.message || 'Google authentication failed';
           console.log('Google OAuth failed:', errorMessage);
-          const frontendUrl = process.env.CLIENT_URL || 'http://localhost:5173';
           return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(errorMessage)}`);
         }
         
@@ -119,7 +128,16 @@ authRouter.get('/me', protect, getMe);
 // PUT /api/auth/profile - Update user profile
 authRouter.put('/profile', protect, validateUpdateProfile, updateProfile);
 
+// PUT /api/auth/password - Change password
+authRouter.put('/password', protect, validateChangePassword, changePassword);
+
+// PATCH /api/auth/profile-picture - Upload profile picture
+authRouter.patch('/profile-picture', protect, upload.single('image'), updateProfilePicture);
+
 // POST /api/auth/logout - Logout user (client-side token deletion)
 authRouter.post('/logout', protect, logout);
+
+// DELETE /api/auth/account - Delete current user account
+authRouter.delete('/account', protect, deleteMyAccount);
 
 export default authRouter;

@@ -14,15 +14,25 @@ console.log('Environment check:', {
 
 import mongoose from 'mongoose';
 import app from './app.js';
+import { cleanupOrphanedUserReferences } from './utils/userCleanup.js';
 
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 // Connect to database then start server
 const connectionString = process.env.MONGO_URI;
-mongoose.connect(connectionString).then(() => {
-  console.log("Connected to MongoDB");
+mongoose.connect(connectionString).then(async () => {
+  console.log('Connected to MongoDB');
+
+  try {
+    const result = await cleanupOrphanedUserReferences();
+    if (result.updatedProjects || result.updatedUsers || result.deletedNotifications) {
+      console.log('Cleaned orphaned user references:', result);
+    }
+  } catch (error) {
+    console.error('Failed to clean orphaned user references:', error.message);
+  }
 }).catch((error) => {
-  console.log("Error connecting to MongoDB", error);
+  console.log('Error connecting to MongoDB', error);
 });
 
 const PORT = process.env.PORT || 5000;

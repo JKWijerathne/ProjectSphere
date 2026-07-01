@@ -4,6 +4,18 @@ import { generateToken } from '../utils/jwt.js';
 import { hashPassword, comparePassword } from '../utils/hashPassword.js';
 import { sendResponse, sendError } from '../utils/response.js';
 import { validateEmailForRole } from '../utils/emailDomainValidator.js';
+import { uploadSingleImage } from '../utils/cloudinaryHelper.js';
+import { removeAllUserData } from '../utils/userCleanup.js';
+
+const formatUserResponse = (user) => ({
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  profilePicture: user.profilePicture,
+  authProviders: user.authProviders,
+  createdAt: user.createdAt,
+});
 
 // Register new user (DEPRECATED - Use OTP flow instead)
 // This is kept for backward compatibility but should use /auth/register-otp
@@ -113,12 +125,7 @@ export const getMe = async (req, res) => {
     sendResponse(res, 200, {
       success: true,
       user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        profilePicture: user.profilePicture,
-        authProviders: user.authProviders,
+        ...formatUserResponse(user),
         followers: user.followers,
         following: user.following
       }
@@ -150,17 +157,65 @@ export const updateProfile = async (req, res) => {
 
     await user.save();
 
-    // Send response without password
     sendResponse(res, 200, {
       success: true,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        profilePicture: user.profilePicture,
-        authProviders: user.authProviders
-      }
+      user: formatUserResponse(user)
+    });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
+// Change password for local auth accounts
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user._id).select('+password');
+
+    if (!user) {
+      return sendError(res, 'User not found', 404);
+    }
+
+    if (!user.password || !user.authProviders.includes('local')) {
+      return sendError(res, 'Password change is not available for Google-only accounts', 400);
+    }
+
+    const isMatch = await comparePassword(currentPassword, user.password);
+    if (!isMatch) {
+      return sendError(res, 'Current password is incorrect', 400);
+    }
+
+    user.password = await hashPassword(newPassword);
+    await user.save();
+
+    sendResponse(res, 200, {
+      success: true,
+      message: 'Password updated successfully'
+    });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
+// Upload profile picture
+export const updateProfilePicture = async (req, res) => {
+  try {
+    if (!req.file) {
+      return sendError(res, 'No image file provided', 400);
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return sendError(res, 'User not found', 404);
+    }
+
+    const imageUrl = await uploadSingleImage(req.file, 'projectsphere/avatars');
+    user.profilePicture = imageUrl;
+    await user.save();
+
+    sendResponse(res, 200, {
+      success: true,
+      user: formatUserResponse(user)
     });
   } catch (error) {
     sendError(res, error.message, 500);
@@ -169,10 +224,11 @@ export const updateProfile = async (req, res) => {
 
 // Google OAuth callback
 export const googleCallback = (req, res) => {
+  const state = req.query.state;
+  const frontendUrl = state || process.env.CLIENT_URL || 'http://localhost:5173';
   try {
     // User is attached by passport middleware
     if (!req.user) {
-      const frontendUrl = process.env.CLIENT_URL || 'http://localhost:5173';
       return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent('Authentication failed')}`);
     }
 
@@ -180,11 +236,9 @@ export const googleCallback = (req, res) => {
     const token = generateToken(req.user._id);
 
     // Redirect to frontend with token
-    const frontendUrl = process.env.CLIENT_URL || 'http://localhost:5173';
     res.redirect(`${frontendUrl}/auth/google/callback?token=${token}`);
   } catch (error) {
     console.error('Google callback error:', error);
-    const frontendUrl = process.env.CLIENT_URL || 'http://localhost:5173';
     res.redirect(`${frontendUrl}/login?error=${encodeURIComponent('Authentication error occurred')}`);
   }
 };
@@ -195,4 +249,23 @@ export const logout = (req, res) => {
     success: true,
     message: 'Logged out successfully'
   });
+};
+
+// Delete current user's account and all associated data
+export const deleteMyAccount = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return sendError(res, 'User not found', 404);
+    }
+
+    await removeAllUserData(user._id, user.email);
+
+    sendResponse(res, 200, {
+      success: true,
+      message: 'Your account and all associated data have been deleted successfully'
+    });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
 };

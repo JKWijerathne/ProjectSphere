@@ -3,6 +3,7 @@ import User from '../models/userModel.js';
 import Project from '../models/projectModel.js';
 import eventEmitter from '../events/eventEmitter.js';
 import { sendResponse, sendError } from '../utils/response.js';
+import { removeAllUserData } from '../utils/userCleanup.js';
 
 // Get all users with optional filters
 export const getAllUsers = async (req, res) => {
@@ -125,15 +126,11 @@ export const deleteUser = async (req, res) => {
       return sendError(res, 'User not found', 404);
     }
 
-    // Delete all projects owned by this user
-    await Project.deleteMany({ owner: user._id });
-
-    // Delete user
-    await user.deleteOne();
+    await removeAllUserData(user._id, user.email);
 
     sendResponse(res, 200, {
       success: true,
-      message: 'User and associated projects deleted successfully'
+      message: 'User account and all associated likes, comments, and projects deleted successfully'
     });
   } catch (error) {
     sendError(res, error.message, 500);

@@ -41,7 +41,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           const detectedRole = getRoleFromEmail(email);
           
           if (!detectedRole) {
-            const error = new Error('Please use a verified email address to continue');
+            const error = new Error('Please use a cerified email address to continue');
             error.email = email;
             return done(error);
           }

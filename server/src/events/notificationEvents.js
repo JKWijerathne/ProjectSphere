@@ -94,4 +94,23 @@ export const initNotificationEvents = () => {
             console.error('Error handling ProjectRejected notification:', error);
         }
     });
+
+    // 6. ProjectCommented Event (Notify Student/Owner)
+    eventEmitter.on('ProjectCommented', async ({ project, sender, comment }) => {
+        try {
+            // Don't notify if the user comments on their own project
+            if (project.owner.toString() === sender._id.toString()) return;
+
+            await Notification.create({
+                recipient: project.owner,
+                sender: sender._id,
+                type: 'ProjectCommented',
+                message: `${sender.name} commented on your project "${project.title}": "${comment.text.substring(0, 30)}..."`,
+                relatedProject: project._id,
+            });
+            console.log('[Event Log] ProjectCommented notification created.');
+        } catch (error) {
+            console.error('Error handling ProjectCommented notification:', error);
+        }
+    });
 };
