@@ -189,6 +189,19 @@ export const getPendingProjects = async (req, res) => {
   }
 };
 
+// Get approved projects (convenience endpoint)
+export const getApprovedProjects = async (req, res) => {
+  try {
+    const approvedProjects = await Project.find({ status: 'Approved' })
+      .populate('owner', 'name email profilePicture')
+      .sort({ updatedAt: -1 });
+
+    sendResponse(res, 200, { success: true, projects: approvedProjects });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
 // Update project status (Approve/Reject) - generic endpoint
 export const updateProjectStatus = async (req, res) => {
   try {
