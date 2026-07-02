@@ -1,25 +1,57 @@
 import nodemailer from 'nodemailer';
 
-const createTransporter = () => {
-  if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
-    return nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT || 587,
-      secure: process.env.EMAIL_SECURE === 'true',
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD }
-    });
+const getEmailConfig = () => {
+  const host = process.env.EMAIL_HOST?.trim();
+  const user = process.env.EMAIL_USER?.trim();
+  const password = process.env.EMAIL_PASSWORD?.trim();
+  const port = Number(process.env.EMAIL_PORT || 587);
+  const secure = process.env.EMAIL_SECURE === 'true' || port === 465;
+
+  if (!host || !user || !password) {
+    return null;
   }
-  console.warn('Email credentials not configured. Using test mode.');
-  return null;
+
+  return {
+    host,
+    port,
+    secure,
+    user,
+    password,
+    from: process.env.EMAIL_FROM?.trim() || user
+  };
+};
+
+const createTransporter = () => {
+  const emailConfig = getEmailConfig();
+
+  if (!emailConfig) {
+    console.warn('Email credentials are not configured.');
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    host: emailConfig.host,
+    port: emailConfig.port,
+    secure: emailConfig.secure,
+    auth: { user: emailConfig.user, pass: emailConfig.password },
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
+    requireTLS: !emailConfig.secure,
+    tls: {
+      servername: emailConfig.host
+    }
+  });
 };
 
 export const sendOTPEmail = async (to, otp, name) => {
   try {
     const transporter = createTransporter();
     if (!transporter) {
-      console.log(`OTP for ${to}: ${otp}`);
-      return { success: true, mode: 'development' };
+      throw new Error('Email service is not configured. Please set EMAIL_HOST, EMAIL_USER, and EMAIL_PASSWORD.');
     }
+
+    const emailConfig = getEmailConfig();
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -150,19 +182,41 @@ University of Kelaniya | Faculty of Computing & Technology
     `;
 
     const mailOptions = {
-      from: `"ProjectSphere Platform" <${process.env.EMAIL_USER}>`,
+      from: `"ProjectSphere Platform" <${emailConfig.from}>`,
       to,
-      subject: `Your ProjectSphere Verification Code: ${otp}`,
+      subject: 'Your ProjectSphere verification code',
       html: htmlContent,
       text: textContent
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`OTP email sent to ${to}`);
-    return { success: true, messageId: info.messageId, mode: 'production' };
+    let lastError;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const info = await transporter.sendMail(mailOptions);
+        if (info.rejected?.length) {
+          throw new Error(`SMTP rejected recipient(s): ${info.rejected.join(', ')}`);
+        }
+
+        console.log(`OTP email accepted for ${to} on attempt ${attempt}`, {
+          messageId: info.messageId,
+          accepted: info.accepted,
+          response: info.response
+        });
+        return { success: true, messageId: info.messageId, accepted: info.accepted, mode: 'production' };
+      } catch (error) {
+        lastError = error;
+        console.warn(`OTP email attempt ${attempt} failed:`, error.message);
+        if (attempt === 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+      }
+    }
+
+    console.error('Email error after retries:', lastError);
+    throw new Error('Failed to send verification email. Please try again in a moment.');
   } catch (error) {
     console.error('Email error:', error);
-    throw new Error('Failed to send verification email.');
+    throw error;
   }
 };
 
@@ -171,8 +225,10 @@ export const sendWelcomeEmail = async (to, name, role) => {
     const transporter = createTransporter();
     if (!transporter) {
       console.log(`Welcome email for: ${to} (${role})`);
-      return { success: true, mode: 'development' };
+      return { success: false, mode: 'not_configured' };
     }
+
+    const emailConfig = getEmailConfig();
 
     // Role-specific content
     const roleContent = {
@@ -233,7 +289,7 @@ export const sendWelcomeEmail = async (to, name, role) => {
     };
 
     const content = roleContent[role] || roleContent.Student;
-    
+
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
@@ -441,7 +497,7 @@ University of Kelaniya | Faculty of Computing & Technology
     `;
 
     const mailOptions = {
-      from: `"ProjectSphere Platform" <${process.env.EMAIL_USER}>`,
+      from: `"ProjectSphere Platform" <${emailConfig.from}>`,
       to,
       subject: `Welcome to ProjectSphere - Your ${role} Account is Ready! 🎉`,
       html: htmlContent,

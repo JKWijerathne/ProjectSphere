@@ -1,6 +1,7 @@
 import express from 'express';
 import { 
   getPendingProjects, 
+  getApprovedProjectsByLecturer,
   approveProject, 
   rejectProject, 
   deleteProject, 
@@ -17,6 +18,9 @@ adminRouter.use(protect, restrictTo('Lecturer'));
 
 // GET /api/admin/projects/pending - Get all pending projects
 adminRouter.get('/projects/pending', getPendingProjects);
+
+// GET /api/admin/projects/approved - Get projects approved by the current lecturer
+adminRouter.get('/projects/approved', getApprovedProjectsByLecturer);
 
 // PUT /api/admin/projects/:id/approve - Approve a project
 adminRouter.put('/projects/:id/approve', approveProject);

@@ -19,11 +19,26 @@ initNotificationEvents();
 
 const app = express();
 
-// CORS Configuration - Allow frontend origin
+// CORS Configuration - Allow localhost frontend origins during development
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  process.env.VITE_CLIENT_URL,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+].filter(Boolean);
+
 const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
 };
 
 // Middleware
@@ -39,7 +54,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Routes Registration
-app.use('/api/auth', authRoutes); 
+app.use('/api/auth', authRoutes);
 app.use('/api/otp', otpRoutes); // OTP verification routes
 app.use('/api/projects', projectRoutes);
 app.use('/api/notifications', notificationRoutes);

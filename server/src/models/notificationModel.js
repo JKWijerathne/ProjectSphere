@@ -21,6 +21,7 @@ const notificationSchema = new mongoose.Schema(
                 'UserFollowed',
                 'ProjectApproved',
                 'ProjectRejected',
+                'ProjectCommented',
             ],
             required: true,
         },

@@ -1,6 +1,7 @@
 // Admin controller - handles user and project management
 import User from '../models/userModel.js';
 import Project from '../models/projectModel.js';
+import Notification from '../models/notificationModel.js';
 import eventEmitter from '../events/eventEmitter.js';
 import { sendResponse, sendError } from '../utils/response.js';
 import { removeAllUserData } from '../utils/userCleanup.js';
@@ -189,6 +190,66 @@ export const getPendingProjects = async (req, res) => {
   }
 };
 
+// Get projects approved by the current lecturer
+export const getApprovedProjectsByLecturer = async (req, res) => {
+  try {
+    const approvalNotifications = await Notification.find({
+      type: 'ProjectApproved',
+      sender: req.user._id,
+      relatedProject: { $ne: null }
+    })
+      .select('relatedProject createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const approvedAtByProjectId = new Map();
+    approvalNotifications.forEach((notification) => {
+      const projectId = notification.relatedProject?.toString();
+      if (projectId && !approvedAtByProjectId.has(projectId)) {
+        approvedAtByProjectId.set(projectId, notification.createdAt);
+      }
+    });
+
+    const legacyApprovedProjectIds = [...approvedAtByProjectId.keys()];
+
+    if (legacyApprovedProjectIds.length > 0) {
+      await Promise.all(
+        legacyApprovedProjectIds.map((projectId) => Project.updateOne(
+          {
+            _id: projectId,
+            status: 'Approved',
+            $or: [
+              { approvedBy: { $exists: false } },
+              { approvedBy: null }
+            ]
+          },
+          {
+            $set: {
+              approvedBy: req.user._id,
+              approvedAt: approvedAtByProjectId.get(projectId) || new Date()
+            }
+          }
+        ))
+      );
+    }
+
+    const approvedProjects = await Project.find({
+      status: 'Approved',
+      $or: [
+        { approvedBy: req.user._id },
+        { _id: { $in: legacyApprovedProjectIds } }
+      ]
+    })
+      .populate('owner', 'name email profilePicture')
+      .populate('approvedBy', 'name email')
+      .sort({ approvedAt: -1, updatedAt: -1 });
+
+    sendResponse(res, 200, { success: true, projects: approvedProjects });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
 // Update project status (Approve/Reject) - generic endpoint
 export const updateProjectStatus = async (req, res) => {
   try {
@@ -204,21 +265,41 @@ export const updateProjectStatus = async (req, res) => {
       return sendError(res, 'Invalid project ID format', 400);
     }
 
-    // Update project status
-    const project = await Project.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true, runValidators: true }
-    ).populate('owner', 'name email');
+    const project = await Project.findById(req.params.id).populate('owner', 'name email');
 
     if (!project) {
       return sendError(res, 'Project not found', 404);
     }
 
-    // Emit events for Approved/Rejected to notify owner
+    const previousStatus = project.status;
+
     if (status === 'Approved') {
+      if (previousStatus === 'Approved' && project.approvedBy) {
+        return sendResponse(res, 200, {
+          success: true,
+          message: 'Project is already approved',
+          project
+        });
+      }
+
+      project.status = 'Approved';
+      project.approvedBy = req.user._id;
+      project.approvedAt = new Date();
+    } else {
+      project.status = status;
+    }
+
+    if (status !== 'Approved' && previousStatus === 'Approved') {
+      project.approvedBy = undefined;
+      project.approvedAt = undefined;
+    }
+
+    await project.save();
+
+    // Emit events for Approved/Rejected to notify owner
+    if (previousStatus !== status && status === 'Approved') {
       eventEmitter.emit('ProjectApproved', { project, sender: req.user });
-    } else if (status === 'Rejected') {
+    } else if (previousStatus !== status && status === 'Rejected') {
       eventEmitter.emit('ProjectRejected', { project, sender: req.user });
     }
 
@@ -241,11 +322,24 @@ export const approveProject = async (req, res) => {
       return sendError(res, 'Project not found', 404);
     }
 
+    const previousStatus = project.status;
+    if (previousStatus === 'Approved' && project.approvedBy) {
+      return sendResponse(res, 200, {
+        success: true,
+        message: 'Project is already approved',
+        project
+      });
+    }
+
     project.status = 'Approved';
+    project.approvedBy = req.user._id;
+    project.approvedAt = new Date();
     await project.save();
 
     // Emit ProjectApproved event
-    eventEmitter.emit('ProjectApproved', { project, sender: req.user });
+    if (previousStatus !== 'Approved') {
+      eventEmitter.emit('ProjectApproved', { project, sender: req.user });
+    }
 
     sendResponse(res, 200, { success: true, message: 'Project approved successfully', project });
   } catch (error) {
@@ -262,11 +356,16 @@ export const rejectProject = async (req, res) => {
       return sendError(res, 'Project not found', 404);
     }
 
+    const previousStatus = project.status;
     project.status = 'Rejected';
+    project.approvedBy = undefined;
+    project.approvedAt = undefined;
     await project.save();
 
     // Emit ProjectRejected event
-    eventEmitter.emit('ProjectRejected', { project, sender: req.user });
+    if (previousStatus !== 'Rejected') {
+      eventEmitter.emit('ProjectRejected', { project, sender: req.user });
+    }
 
     sendResponse(res, 200, { success: true, message: 'Project rejected successfully', project });
   } catch (error) {

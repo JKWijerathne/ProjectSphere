@@ -1,7 +1,14 @@
 import dotenv from 'dotenv';
 import dns from 'dns';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Load environment variables FIRST before any other imports
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const envPath = path.resolve(__dirname, '../.env');
+
+dotenv.config({ path: envPath });
 dotenv.config();
 
 // Debug: Log if Google OAuth credentials are loaded
@@ -12,9 +19,11 @@ console.log('Environment check:', {
   JWT_SECRET: process.env.JWT_SECRET ? 'Loaded ✓' : 'Missing ✗',
 });
 
-import mongoose from 'mongoose';
-import app from './app.js';
-import { cleanupOrphanedUserReferences } from './utils/userCleanup.js';
+const [{ default: mongoose }, { default: app }, { cleanupOrphanedUserReferences }] = await Promise.all([
+  import('mongoose'),
+  import('./app.js'),
+  import('./utils/userCleanup.js')
+]);
 
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 
