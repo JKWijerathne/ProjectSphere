@@ -6,6 +6,19 @@ import eventEmitter from '../events/eventEmitter.js';
 import { sendResponse, sendError } from '../utils/response.js';
 import { removeAllUserData } from '../utils/userCleanup.js';
 
+const getDecisionMessage = (body = {}, status) => {
+  const candidates = status === 'Approved'
+    ? [body.approvalMessage, body.message, body.feedback]
+    : [body.rejectionMessage, body.rejectionReason, body.reason, body.message, body.feedback];
+
+  const customMessage = candidates.find((value) => typeof value === 'string' && value.trim());
+  if (customMessage) return customMessage.trim();
+
+  return status === 'Approved'
+    ? 'Your project has been approved. It is now visible to recruiters and other ProjectSphere users.'
+    : 'Your project was rejected. Please review the feedback from your lecturer and update your submission before trying again.';
+};
+
 // Get all users with optional filters
 export const getAllUsers = async (req, res) => {
   try {
@@ -296,11 +309,13 @@ export const updateProjectStatus = async (req, res) => {
 
     await project.save();
 
+    const decisionMessage = getDecisionMessage(req.body, status);
+
     // Emit events for Approved/Rejected to notify owner
     if (previousStatus !== status && status === 'Approved') {
-      eventEmitter.emit('ProjectApproved', { project, sender: req.user });
+      eventEmitter.emit('ProjectApproved', { project, sender: req.user, decisionMessage });
     } else if (previousStatus !== status && status === 'Rejected') {
-      eventEmitter.emit('ProjectRejected', { project, sender: req.user });
+      eventEmitter.emit('ProjectRejected', { project, sender: req.user, decisionMessage });
     }
 
     sendResponse(res, 200, {
@@ -336,9 +351,11 @@ export const approveProject = async (req, res) => {
     project.approvedAt = new Date();
     await project.save();
 
+    const decisionMessage = getDecisionMessage(req.body, 'Approved');
+
     // Emit ProjectApproved event
     if (previousStatus !== 'Approved') {
-      eventEmitter.emit('ProjectApproved', { project, sender: req.user });
+      eventEmitter.emit('ProjectApproved', { project, sender: req.user, decisionMessage });
     }
 
     sendResponse(res, 200, { success: true, message: 'Project approved successfully', project });
@@ -362,9 +379,11 @@ export const rejectProject = async (req, res) => {
     project.approvedAt = undefined;
     await project.save();
 
+    const decisionMessage = getDecisionMessage(req.body, 'Rejected');
+
     // Emit ProjectRejected event
     if (previousStatus !== 'Rejected') {
-      eventEmitter.emit('ProjectRejected', { project, sender: req.user });
+      eventEmitter.emit('ProjectRejected', { project, sender: req.user, decisionMessage });
     }
 
     sendResponse(res, 200, { success: true, message: 'Project rejected successfully', project });

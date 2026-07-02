@@ -1,6 +1,20 @@
 import eventEmitter from './eventEmitter.js';
 import Notification from '../models/notificationModel.js';
 import User from '../models/userModel.js';
+import { sendProjectDecisionEmail } from '../utils/emailService.js';
+
+const getProjectOwner = async (project) => {
+    if (project.owner?.email) {
+        return project.owner;
+    }
+
+    const ownerId = project.owner?._id || project.owner;
+    if (!ownerId) {
+        return null;
+    }
+
+    return User.findById(ownerId).select('name email');
+};
 
 /**
  * Initialize all application event listeners that generate notifications.
@@ -64,15 +78,31 @@ export const initNotificationEvents = () => {
     });
 
     // 4. ProjectApproved Event (Notify Student/Owner)
-    eventEmitter.on('ProjectApproved', async ({ project, sender }) => {
+    eventEmitter.on('ProjectApproved', async ({ project, sender, decisionMessage }) => {
         try {
+            const owner = await getProjectOwner(project);
+
             await Notification.create({
-                recipient: project.owner,
+                recipient: owner?._id || project.owner,
                 sender: sender._id,
                 type: 'ProjectApproved',
-                message: `Your project "${project.title}" has been approved.`,
+                message: decisionMessage
+                    ? `Your project "${project.title}" has been approved. Message: ${decisionMessage}`
+                    : `Your project "${project.title}" has been approved.`,
                 relatedProject: project._id,
             });
+
+            if (owner?.email) {
+                await sendProjectDecisionEmail({
+                    to: owner.email,
+                    studentName: owner.name,
+                    projectTitle: project.title,
+                    status: 'Approved',
+                    message: decisionMessage,
+                    lecturerName: sender.name
+                });
+            }
+
             console.log('[Event Log] ProjectApproved notification created.');
         } catch (error) {
             console.error('Error handling ProjectApproved notification:', error);
@@ -80,15 +110,31 @@ export const initNotificationEvents = () => {
     });
 
     // 5. ProjectRejected Event (Notify Student/Owner)
-    eventEmitter.on('ProjectRejected', async ({ project, sender }) => {
+    eventEmitter.on('ProjectRejected', async ({ project, sender, decisionMessage }) => {
         try {
+            const owner = await getProjectOwner(project);
+
             await Notification.create({
-                recipient: project.owner,
+                recipient: owner?._id || project.owner,
                 sender: sender._id,
                 type: 'ProjectRejected',
-                message: `Your project "${project.title}" has been rejected.`,
+                message: decisionMessage
+                    ? `Your project "${project.title}" has been rejected. Message: ${decisionMessage}`
+                    : `Your project "${project.title}" has been rejected.`,
                 relatedProject: project._id,
             });
+
+            if (owner?.email) {
+                await sendProjectDecisionEmail({
+                    to: owner.email,
+                    studentName: owner.name,
+                    projectTitle: project.title,
+                    status: 'Rejected',
+                    message: decisionMessage,
+                    lecturerName: sender.name
+                });
+            }
+
             console.log('[Event Log] ProjectRejected notification created.');
         } catch (error) {
             console.error('Error handling ProjectRejected notification:', error);

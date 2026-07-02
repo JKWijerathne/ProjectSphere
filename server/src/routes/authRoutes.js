@@ -8,6 +8,7 @@ import {
   updateProfile,
   changePassword,
   updateProfilePicture,
+  removeProfilePicture,
   googleCallback,
   logout,
   deleteMyAccount,
@@ -133,6 +134,9 @@ authRouter.put('/password', protect, validateChangePassword, changePassword);
 
 // PATCH /api/auth/profile-picture - Upload profile picture
 authRouter.patch('/profile-picture', protect, upload.single('image'), updateProfilePicture);
+
+// DELETE /api/auth/profile-picture - Remove profile picture
+authRouter.delete('/profile-picture', protect, removeProfilePicture);
 
 // POST /api/auth/logout - Logout user (client-side token deletion)
 authRouter.post('/logout', protect, logout);

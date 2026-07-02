@@ -222,6 +222,27 @@ export const updateProfilePicture = async (req, res) => {
   }
 };
 
+// Remove profile picture
+export const removeProfilePicture = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return sendError(res, 'User not found', 404);
+    }
+
+    user.profilePicture = '';
+    await user.save();
+
+    sendResponse(res, 200, {
+      success: true,
+      message: 'Profile picture removed successfully',
+      user: formatUserResponse(user)
+    });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
 // Google OAuth callback
 export const googleCallback = (req, res) => {
   const state = req.query.state;

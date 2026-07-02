@@ -44,6 +44,146 @@ const createTransporter = () => {
   });
 };
 
+const escapeHtml = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+export const sendProjectDecisionEmail = async ({
+  to,
+  studentName,
+  projectTitle,
+  status,
+  message,
+  lecturerName
+}) => {
+  try {
+    const transporter = createTransporter();
+    if (!transporter) {
+      console.log(`Project ${status} email skipped for ${to}: email service is not configured.`);
+      return { success: false, mode: 'not_configured' };
+    }
+
+    const emailConfig = getEmailConfig();
+    const normalizedStatus = status === 'Approved' ? 'Approved' : 'Rejected';
+    const isApproved = normalizedStatus === 'Approved';
+    const statusColor = isApproved ? '#16a34a' : '#dc2626';
+    const statusBackground = isApproved ? '#dcfce7' : '#fee2e2';
+    const decisionText = message || (
+      isApproved
+        ? 'Your project has been approved and is now visible to recruiters and other users.'
+        : 'Your project was rejected. Please review the feedback and update your submission.'
+    );
+
+    const safeStudentName = escapeHtml(studentName || 'Student');
+    const safeProjectTitle = escapeHtml(projectTitle || 'your project');
+    const safeDecisionText = escapeHtml(decisionText);
+    const safeLecturerName = escapeHtml(lecturerName || 'Your lecturer');
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project ${normalizedStatus}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background-color: #f8fafc;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f8fafc;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08); overflow: hidden;">
+          <tr>
+            <td style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 32px 30px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 800;">ProjectSphere</h1>
+              <p style="margin: 8px 0 0; color: rgba(255,255,255,0.88); font-size: 14px;">Project review update</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 36px 30px;">
+              <p style="margin: 0 0 18px; color: #475569; font-size: 16px;">Hi <strong>${safeStudentName}</strong>,</p>
+              <h2 style="margin: 0 0 16px; color: #0f172a; font-size: 24px; font-weight: 800;">
+                Your project has been ${normalizedStatus.toLowerCase()}
+              </h2>
+              <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 22px 0; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+                <tr>
+                  <td style="padding: 18px;">
+                    <p style="margin: 0 0 8px; color: #64748b; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Project</p>
+                    <p style="margin: 0; color: #0f172a; font-size: 18px; font-weight: 800;">${safeProjectTitle}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 0 18px 18px;">
+                    <span style="display: inline-block; background-color: ${statusBackground}; color: ${statusColor}; padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 800;">
+                      ${normalizedStatus}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 0 0 10px; color: #334155; font-size: 16px; font-weight: 700;">Message from ${safeLecturerName}</p>
+              <div style="margin: 0; padding: 16px; background-color: #f1f5f9; border-left: 4px solid ${statusColor}; border-radius: 10px; color: #475569; font-size: 15px; line-height: 1.6;">
+                ${safeDecisionText}
+              </div>
+              <p style="margin: 24px 0 0; color: #64748b; font-size: 14px; line-height: 1.6;">
+                You can log in to ProjectSphere to view the latest status of your submission.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #f8fafc; padding: 22px 30px; text-align: center;">
+              <p style="margin: 0; color: #94a3b8; font-size: 12px;">© ${new Date().getFullYear()} ProjectSphere. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const textContent = `
+ProjectSphere - Project ${normalizedStatus}
+
+Hi ${studentName || 'Student'},
+
+Your project "${projectTitle || 'your project'}" has been ${normalizedStatus.toLowerCase()}.
+
+Message from ${lecturerName || 'your lecturer'}:
+${decisionText}
+
+You can log in to ProjectSphere to view the latest status of your submission.
+
+© ${new Date().getFullYear()} ProjectSphere. All rights reserved.
+    `;
+
+    const info = await transporter.sendMail({
+      from: `"ProjectSphere Platform" <${emailConfig.from}>`,
+      to,
+      subject: `Your project "${projectTitle}" has been ${normalizedStatus.toLowerCase()}`,
+      html: htmlContent,
+      text: textContent
+    });
+
+    if (info.rejected?.length) {
+      throw new Error(`SMTP rejected recipient(s): ${info.rejected.join(', ')}`);
+    }
+
+    console.log(`Project ${normalizedStatus} email accepted for ${to}`, {
+      messageId: info.messageId,
+      accepted: info.accepted,
+      response: info.response
+    });
+
+    return { success: true, messageId: info.messageId, accepted: info.accepted, mode: 'production' };
+  } catch (error) {
+    console.error(`Project ${status} email error:`, error);
+    return { success: false, error: error.message };
+  }
+};
+
 export const sendOTPEmail = async (to, otp, name) => {
   try {
     const transporter = createTransporter();
