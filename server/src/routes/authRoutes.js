@@ -7,7 +7,10 @@ import {
   getMe, 
   updateProfile,
   changePassword,
+  forgotPassword,
+  resetPassword,
   updateProfilePicture,
+  removeProfilePicture,
   googleCallback,
   logout,
   deleteMyAccount,
@@ -18,7 +21,9 @@ import {
   validateRegister, 
   validateLogin, 
   validateUpdateProfile,
-  validateChangePassword
+  validateChangePassword,
+  validateForgotPassword,
+  validateResetPassword
 } from '../validations/authValidation.js';
 import rateLimit from 'express-rate-limit';
 
@@ -54,6 +59,12 @@ authRouter.post('/register', registerLimiter, validateRegister, register);
 
 // POST /api/auth/login - Login with email and password
 authRouter.post('/login', authLimiter, validateLogin, login);
+
+// POST /api/auth/forgot-password - Send password reset email
+authRouter.post('/forgot-password', authLimiter, validateForgotPassword, forgotPassword);
+
+// PUT /api/auth/reset-password/:token - Reset password from email token
+authRouter.put('/reset-password/:token', authLimiter, validateResetPassword, resetPassword);
 
 // Google OAuth routes - Only register if Google OAuth is configured
 const isGoogleConfigured = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
@@ -133,6 +144,9 @@ authRouter.put('/password', protect, validateChangePassword, changePassword);
 
 // PATCH /api/auth/profile-picture - Upload profile picture
 authRouter.patch('/profile-picture', protect, upload.single('image'), updateProfilePicture);
+
+// DELETE /api/auth/profile-picture - Remove profile picture
+authRouter.delete('/profile-picture', protect, removeProfilePicture);
 
 // POST /api/auth/logout - Logout user (client-side token deletion)
 authRouter.post('/logout', protect, logout);

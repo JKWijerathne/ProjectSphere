@@ -1,4 +1,5 @@
 // Authentication controller - handles register, login, profile
+import crypto from 'crypto';
 import User from '../models/userModel.js';
 import { generateToken } from '../utils/jwt.js';
 import { hashPassword, comparePassword } from '../utils/hashPassword.js';
@@ -6,6 +7,7 @@ import { sendResponse, sendError } from '../utils/response.js';
 import { validateEmailForRole } from '../utils/emailDomainValidator.js';
 import { uploadSingleImage } from '../utils/cloudinaryHelper.js';
 import { removeAllUserData } from '../utils/userCleanup.js';
+import { sendPasswordResetEmail } from '../utils/emailService.js';
 
 const formatUserResponse = (user) => ({
   _id: user._id,
@@ -16,6 +18,32 @@ const formatUserResponse = (user) => ({
   authProviders: user.authProviders,
   createdAt: user.createdAt,
 });
+
+const getAllowedFrontendUrl = (origin) => {
+  const fallbackUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const allowedOrigins = [
+    process.env.CLIENT_URL,
+    process.env.VITE_CLIENT_URL,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+  ].filter(Boolean);
+
+  if (origin && allowedOrigins.includes(origin)) {
+    return origin;
+  }
+
+  if (
+    process.env.NODE_ENV !== 'production'
+    && typeof origin === 'string'
+    && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)
+  ) {
+    return origin;
+  }
+
+  return fallbackUrl;
+};
 
 // Register new user (DEPRECATED - Use OTP flow instead)
 // This is kept for backward compatibility but should use /auth/register-otp
@@ -197,6 +225,86 @@ export const changePassword = async (req, res) => {
   }
 };
 
+// Request a password reset email for local auth accounts
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email, origin } = req.body;
+    const normalizedEmail = email?.toLowerCase().trim();
+    const genericMessage = 'If an email/password account exists for that email, a reset link has been sent.';
+
+    const user = await User.findOne({ email: normalizedEmail }).select('+passwordResetToken +passwordResetExpires');
+
+    if (!user || !user.authProviders.includes('local')) {
+      return sendResponse(res, 200, {
+        success: true,
+        message: genericMessage
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.passwordResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.passwordResetExpires = Date.now() + 15 * 60 * 1000;
+    await user.save({ validateBeforeSave: false });
+
+    const frontendUrl = getAllowedFrontendUrl(origin);
+    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        name: user.name,
+        resetUrl
+      });
+    } catch (error) {
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+      throw error;
+    }
+
+    sendResponse(res, 200, {
+      success: true,
+      message: genericMessage
+    });
+  } catch (error) {
+    sendError(res, error.message || 'Unable to send password reset email', 500);
+  }
+};
+
+// Reset password using a valid email token
+export const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: Date.now() }
+    }).select('+password +passwordResetToken +passwordResetExpires');
+
+    if (!user) {
+      return sendError(res, 'Password reset link is invalid or has expired', 400);
+    }
+
+    if (!user.authProviders.includes('local')) {
+      return sendError(res, 'Password reset is not available for Google-only accounts', 400);
+    }
+
+    user.password = await hashPassword(password);
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    sendResponse(res, 200, {
+      success: true,
+      message: 'Password reset successfully. You can now sign in with your new password.'
+    });
+  } catch (error) {
+    sendError(res, error.message || 'Unable to reset password', 500);
+  }
+};
+
 // Upload profile picture
 export const updateProfilePicture = async (req, res) => {
   try {
@@ -215,6 +323,27 @@ export const updateProfilePicture = async (req, res) => {
 
     sendResponse(res, 200, {
       success: true,
+      user: formatUserResponse(user)
+    });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
+// Remove profile picture
+export const removeProfilePicture = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return sendError(res, 'User not found', 404);
+    }
+
+    user.profilePicture = '';
+    await user.save();
+
+    sendResponse(res, 200, {
+      success: true,
+      message: 'Profile picture removed successfully',
       user: formatUserResponse(user)
     });
   } catch (error) {
@@ -259,11 +388,12 @@ export const deleteMyAccount = async (req, res) => {
       return sendError(res, 'User not found', 404);
     }
 
-    await removeAllUserData(user._id, user.email);
+    const cleanup = await removeAllUserData(user._id, user.email);
 
     sendResponse(res, 200, {
       success: true,
-      message: 'Your account and all associated data have been deleted successfully'
+      message: 'Your account and all associated data have been deleted successfully',
+      cleanup,
     });
   } catch (error) {
     sendError(res, error.message, 500);

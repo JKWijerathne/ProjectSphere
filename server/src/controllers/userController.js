@@ -2,6 +2,10 @@ import User from '../models/userModel.js';
 import eventEmitter from '../events/eventEmitter.js';
 import { sendResponse, sendError } from '../utils/response.js';
 
+const hasUserReference = (references = [], userId) => (
+  references.some((id) => id.toString() === userId.toString())
+);
+
 // Get user profile by ID
 export const getUserProfile = async (req, res) => {
   try {
@@ -52,13 +56,17 @@ export const followUser = async (req, res) => {
       return sendError(res, 'User not found', 404);
     }
 
-    const isFollowing = currentUser.following.includes(targetUserId);
+    const isFollowing = hasUserReference(currentUser.following, targetUserId);
     let followed = false;
 
     if (!isFollowing) {
       // Follow
-      currentUser.following.push(targetUserId);
-      targetUser.followers.push(currentUserId);
+      if (!hasUserReference(currentUser.following, targetUserId)) {
+        currentUser.following.push(targetUserId);
+      }
+      if (!hasUserReference(targetUser.followers, currentUserId)) {
+        targetUser.followers.push(currentUserId);
+      }
 
       await currentUser.save();
       await targetUser.save();
@@ -113,7 +121,7 @@ export const unfollowUser = async (req, res) => {
     }
 
     // Check if not following
-    if (!currentUser.following.includes(userToUnfollow._id)) {
+    if (!hasUserReference(currentUser.following, userToUnfollow._id)) {
       return sendError(res, 'You are not following this user', 400);
     }
 
