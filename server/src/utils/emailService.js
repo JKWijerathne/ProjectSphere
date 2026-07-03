@@ -360,6 +360,126 @@ University of Kelaniya | Faculty of Computing & Technology
   }
 };
 
+export const sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
+  try {
+    const transporter = createTransporter();
+    if (!transporter) {
+      throw new Error('Email service is not configured. Please set EMAIL_HOST, EMAIL_USER, and EMAIL_PASSWORD.');
+    }
+
+    const emailConfig = getEmailConfig();
+    const safeName = escapeHtml(name || 'there');
+    const safeResetUrl = escapeHtml(resetUrl);
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Your Password</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background-color: #f8fafc;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f8fafc;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08); overflow: hidden;">
+          <tr>
+            <td style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 32px 30px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 800;">ProjectSphere</h1>
+              <p style="margin: 8px 0 0; color: rgba(255,255,255,0.88); font-size: 14px;">Password reset request</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 36px 30px;">
+              <p style="margin: 0 0 18px; color: #475569; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
+              <h2 style="margin: 0 0 16px; color: #0f172a; font-size: 24px; font-weight: 800;">Reset your password</h2>
+              <p style="margin: 0 0 24px; color: #475569; font-size: 16px; line-height: 1.6;">
+                We received a request to reset your ProjectSphere password. Use the secure button below to create a new password.
+              </p>
+              <table role="presentation" style="width: 100%; margin: 30px 0;">
+                <tr>
+                  <td style="text-align: center;">
+                    <a href="${safeResetUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 13px 22px; border-radius: 10px; font-size: 15px; font-weight: 800;">
+                      Reset password
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 0 0 16px; color: #64748b; font-size: 14px; line-height: 1.6;">
+                This link will expire in 15 minutes. If you did not request a password reset, you can safely ignore this email.
+              </p>
+              <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.6;">
+                If the button does not work, copy and paste this link into your browser:<br>
+                <a href="${safeResetUrl}" style="color: #2563eb; word-break: break-all;">${safeResetUrl}</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #f8fafc; padding: 22px 30px; text-align: center;">
+              <p style="margin: 0; color: #94a3b8; font-size: 12px;">© ${new Date().getFullYear()} ProjectSphere. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const textContent = `
+ProjectSphere - Password Reset
+
+Hi ${name || 'there'},
+
+We received a request to reset your ProjectSphere password.
+
+Reset your password here:
+${resetUrl}
+
+This link will expire in 15 minutes. If you did not request a password reset, ignore this email.
+    `;
+
+    const mailOptions = {
+      from: `"ProjectSphere Platform" <${emailConfig.from}>`,
+      to,
+      subject: 'Reset your ProjectSphere password',
+      html: htmlContent,
+      text: textContent
+    };
+
+    let lastError;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const info = await transporter.sendMail(mailOptions);
+        if (info.rejected?.length) {
+          throw new Error(`SMTP rejected recipient(s): ${info.rejected.join(', ')}`);
+        }
+
+        console.log(`Password reset email accepted for ${to} on attempt ${attempt}`, {
+          messageId: info.messageId,
+          accepted: info.accepted,
+          response: info.response
+        });
+
+        return { success: true, messageId: info.messageId, accepted: info.accepted, mode: 'production' };
+      } catch (error) {
+        lastError = error;
+        console.warn(`Password reset email attempt ${attempt} failed:`, error.message);
+        if (attempt === 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+      }
+    }
+
+    throw new Error(lastError?.message || 'Failed to send password reset email. Please try again in a moment.');
+  } catch (error) {
+    console.error('Password reset email error:', error);
+    throw error;
+  }
+};
+
 export const sendWelcomeEmail = async (to, name, role) => {
   try {
     const transporter = createTransporter();

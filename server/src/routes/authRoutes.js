@@ -7,6 +7,8 @@ import {
   getMe, 
   updateProfile,
   changePassword,
+  forgotPassword,
+  resetPassword,
   updateProfilePicture,
   removeProfilePicture,
   googleCallback,
@@ -19,7 +21,9 @@ import {
   validateRegister, 
   validateLogin, 
   validateUpdateProfile,
-  validateChangePassword
+  validateChangePassword,
+  validateForgotPassword,
+  validateResetPassword
 } from '../validations/authValidation.js';
 import rateLimit from 'express-rate-limit';
 
@@ -55,6 +59,12 @@ authRouter.post('/register', registerLimiter, validateRegister, register);
 
 // POST /api/auth/login - Login with email and password
 authRouter.post('/login', authLimiter, validateLogin, login);
+
+// POST /api/auth/forgot-password - Send password reset email
+authRouter.post('/forgot-password', authLimiter, validateForgotPassword, forgotPassword);
+
+// PUT /api/auth/reset-password/:token - Reset password from email token
+authRouter.put('/reset-password/:token', authLimiter, validateResetPassword, resetPassword);
 
 // Google OAuth routes - Only register if Google OAuth is configured
 const isGoogleConfigured = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;

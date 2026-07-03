@@ -1,45 +1,90 @@
+import mongoose from 'mongoose';
 import User from '../models/userModel.js';
 import Project from '../models/projectModel.js';
 import Notification from '../models/notificationModel.js';
 import PendingRegistration from '../models/pendingRegistration.js';
 
+const getUserIdReferences = (userId) => {
+  const userIdString = userId?.toString();
+  if (!userIdString) {
+    throw new Error('User id is required for account cleanup');
+  }
+
+  const references = [userIdString];
+  if (mongoose.Types.ObjectId.isValid(userIdString)) {
+    references.unshift(new mongoose.Types.ObjectId(userIdString));
+  }
+
+  return references;
+};
+
 /**
  * Remove all data associated with a user before deleting their account.
  */
 export async function removeAllUserData(userId, userEmail) {
-  const ownedProjects = await Project.find({ owner: userId }, '_id').lean();
+  const userReferences = getUserIdReferences(userId);
+  const userReferenceFilter = { $in: userReferences };
+
+  const ownedProjects = await Project.find({ owner: userReferenceFilter }, '_id').lean();
   const ownedProjectIds = ownedProjects.map((project) => project._id);
 
-  await Notification.deleteMany({
+  const notificationResult = await Notification.deleteMany({
     $or: [
-      { recipient: userId },
-      { sender: userId },
+      { recipient: userReferenceFilter },
+      { sender: userReferenceFilter },
       ...(ownedProjectIds.length ? [{ relatedProject: { $in: ownedProjectIds } }] : []),
     ],
   });
 
-  await Project.deleteMany({ owner: userId });
+  const deletedProjectsResult = await Project.deleteMany({ owner: userReferenceFilter });
 
-  await Project.updateMany(
-    { likes: userId },
-    { $pull: { likes: userId } }
+  const likedProjectsResult = await Project.updateMany(
+    { likes: userReferenceFilter },
+    { $pull: { likes: userReferenceFilter } }
   );
 
-  await Project.updateMany(
-    { 'comments.user': userId },
-    { $pull: { comments: { user: userId } } }
+  const commentedProjectsResult = await Project.updateMany(
+    { 'comments.user': userReferenceFilter },
+    { $pull: { comments: { user: userReferenceFilter } } }
   );
 
-  await User.updateMany(
-    {},
-    { $pull: { followers: userId, following: userId } }
+  const approvedProjectsResult = await Project.updateMany(
+    { approvedBy: userReferenceFilter },
+    { $unset: { approvedBy: '', approvedAt: '' } }
   );
 
+  const socialUsersResult = await User.updateMany(
+    {
+      $or: [
+        { followers: userReferenceFilter },
+        { following: userReferenceFilter },
+      ],
+    },
+    {
+      $pull: {
+        followers: userReferenceFilter,
+        following: userReferenceFilter,
+      },
+    }
+  );
+
+  let pendingRegistrationResult = { deletedCount: 0 };
   if (userEmail) {
-    await PendingRegistration.deleteOne({ email: userEmail });
+    pendingRegistrationResult = await PendingRegistration.deleteOne({ email: userEmail });
   }
 
-  await User.deleteOne({ _id: userId });
+  const deletedUserResult = await User.deleteOne({ _id: userReferenceFilter });
+
+  return {
+    deletedUsers: deletedUserResult.deletedCount || 0,
+    deletedProjects: deletedProjectsResult.deletedCount || 0,
+    deletedNotifications: notificationResult.deletedCount || 0,
+    deletedPendingRegistrations: pendingRegistrationResult.deletedCount || 0,
+    updatedProjectsWithRemovedLikes: likedProjectsResult.modifiedCount || 0,
+    updatedProjectsWithRemovedComments: commentedProjectsResult.modifiedCount || 0,
+    updatedProjectsWithRemovedApprover: approvedProjectsResult.modifiedCount || 0,
+    updatedSocialUsers: socialUsersResult.modifiedCount || 0,
+  };
 }
 
 /**

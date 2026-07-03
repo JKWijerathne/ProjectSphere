@@ -140,11 +140,12 @@ export const deleteUser = async (req, res) => {
       return sendError(res, 'User not found', 404);
     }
 
-    await removeAllUserData(user._id, user.email);
+    const cleanup = await removeAllUserData(user._id, user.email);
 
     sendResponse(res, 200, {
       success: true,
-      message: 'User account and all associated likes, comments, and projects deleted successfully'
+      message: 'User account and all associated likes, comments, follows, and projects deleted successfully',
+      cleanup,
     });
   } catch (error) {
     sendError(res, error.message, 500);
