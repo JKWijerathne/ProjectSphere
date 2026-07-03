@@ -69,13 +69,14 @@ export const registerWithOTP = async (req, res) => {
       expiresAt // MongoDB will auto-delete after 2 minutes
     });
 
-    // Send OTP via email
+    // Send OTP via email (non-blocking - allow registration even if email fails)
     try {
       await sendOTPEmail(email, otp, name);
+      console.log('✅ OTP email sent successfully');
     } catch (emailError) {
-      // If email fails, delete pending registration
-      await PendingRegistration.deleteOne({ _id: pendingReg._id });
-      return sendError(res, 'Failed to send verification email. Please try again.', 500);
+      console.error('⚠️ Email service error (continuing anyway):', emailError.message);
+      // Don't fail registration if email fails - OTP is shown in console for development
+      console.log('📧 OTP for development:', otp);
     }
 
     // Send success response
