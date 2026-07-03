@@ -2,8 +2,6 @@ import express from 'express';
 import { 
   getPendingProjects, 
   getApprovedProjectsByLecturer,
-  getPendingProjects,
-  getApprovedProjects,
   approveProject, 
   rejectProject, 
   deleteProject, 
@@ -23,8 +21,6 @@ adminRouter.get('/projects/pending', getPendingProjects);
 
 // GET /api/admin/projects/approved - Get projects approved by the current lecturer
 adminRouter.get('/projects/approved', getApprovedProjectsByLecturer);
-// GET /api/admin/projects/approved - Get all approved projects
-adminRouter.get('/projects/approved', getApprovedProjects);
 
 // PUT /api/admin/projects/:id/approve - Approve a project
 adminRouter.put('/projects/:id/approve', approveProject);

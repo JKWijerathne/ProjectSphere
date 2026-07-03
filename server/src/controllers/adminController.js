@@ -257,6 +257,13 @@ export const getApprovedProjectsByLecturer = async (req, res) => {
       .populate('owner', 'name email profilePicture')
       .populate('approvedBy', 'name email')
       .sort({ approvedAt: -1, updatedAt: -1 });
+
+    sendResponse(res, 200, { success: true, projects: approvedProjects });
+  } catch (error) {
+    sendError(res, error.message, 500);
+  }
+};
+
 // Get approved projects (convenience endpoint)
 export const getApprovedProjects = async (req, res) => {
   try {

@@ -181,65 +181,10 @@ You can log in to ProjectSphere to view the latest status of your submission.
   } catch (error) {
     console.error(`Project ${status} email error:`, error);
     return { success: false, error: error.message };
-// Development mode: Set USE_EMAIL=false in .env to skip email and show OTP in console
-const USE_EMAIL = process.env.USE_EMAIL !== 'false' && 
-                  process.env.EMAIL_HOST && 
-                  process.env.EMAIL_USER && 
-                  process.env.EMAIL_PASSWORD;
-
-const createTransporter = () => {
-  if (!USE_EMAIL) {
-    console.log('📧 Email service: DEVELOPMENT MODE (OTPs shown in console only)');
-    return null;
-  }
-
-  try {
-    const transportOptions = {
-      service: 'gmail', // Use Gmail service (handles host/port automatically)
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD
-      },
-      pool: true, // Use connection pooling
-      maxConnections: 5,
-      maxMessages: 100,
-      rateDelta: 1000,
-      rateLimit: 5
-    };
-
-    console.log('📧 Initializing Gmail SMTP service...');
-    const transporter = nodemailer.createTransport(transportOptions);
-    
-    // Verify connection on startup
-    transporter.verify((error, success) => {
-      if (error) {
-        console.error('❌ Gmail SMTP connection failed:', error.message);
-        console.log('⚠️  Please check:');
-        console.log('   1. Gmail App Password is correct');
-        console.log('   2. 2-Factor Authentication is enabled');
-        console.log('   3. Internet connection is active');
-        console.log('   4. Firewall is not blocking port 587');
-      } else {
-        console.log('✅ Gmail SMTP connection verified - ready to send emails');
-      }
-    });
-    
-    return transporter;
-  } catch (error) {
-    console.error('❌ Failed to create email transporter:', error.message);
-    return null;
   }
 };
 
 export const sendOTPEmail = async (to, otp, name) => {
-  try {
-    const transporter = createTransporter();
-    if (!transporter) {
-      throw new Error('Email service is not configured. Please set EMAIL_HOST, EMAIL_USER, and EMAIL_PASSWORD.');
-    }
-
-    const emailConfig = getEmailConfig();
-
   // Always log OTP for development/debugging
   console.log(`\n${'='.repeat(60)}`);
   console.log(`📧 OTP Email Request`);
@@ -255,6 +200,8 @@ export const sendOTPEmail = async (to, otp, name) => {
     console.log('✅ Development mode: OTP shown above (no email sent)');
     return { success: true, mode: 'development', otp };
   }
+
+  const emailConfig = getEmailConfig();
 
   // Try to send email, but don't fail if it doesn't work
   try {
@@ -389,7 +336,6 @@ University of Kelaniya | Faculty of Computing & Technology
     const mailOptions = {
       from: `"ProjectSphere Platform" <${emailConfig.from}>`,
       to,
-      subject: 'Your ProjectSphere verification code',
       subject: `🔐 Your ProjectSphere Verification Code: ${otp}`,
       html: htmlContent,
       text: textContent
@@ -543,14 +489,6 @@ This link will expire in 15 minutes. If you did not request a password reset, ig
   } catch (error) {
     console.error('Password reset email error:', error);
     throw error;
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ OTP email sent successfully to ${to}`);
-    return { success: true, mode: 'production' };
-  } catch (error) {
-    console.error(`⚠️ Failed to send OTP email to ${to}:`, error.message);
-    console.log('📧 Continuing with development mode - OTP shown above');
-    // Don't throw error - allow registration to continue
-    return { success: true, mode: 'development-fallback', otp, error: error.message };
   }
 };
 
@@ -623,77 +561,8 @@ export const sendWelcomeEmail = async (to, name, role) => {
     };
 
     const content = roleContent[role] || roleContent.Student;
-
-  const transporter = createTransporter();
-  
-  // If no transporter, skip welcome email
-  if (!transporter) {
-    console.log(`📧 Development mode: Skipping welcome email for ${to}`);
-    return { success: true, mode: 'development' };
-  }
-
-  // Role-specific content
-  const roleContent = {
-    Student: {
-      greeting: 'Welcome to Your Academic Journey!',
-      benefits: [
-        'Showcase your projects to recruiters and industry professionals',
-        'Build a professional portfolio that stands out',
-        'Connect with peers and collaborate on innovative ideas',
-        'Receive feedback from lecturers and industry experts',
-        'Get discovered by top companies looking for talent'
-      ],
-      nextSteps: [
-        'Complete your profile with a professional photo',
-        'Upload your first project and make it shine',
-        'Explore projects from fellow students',
-        'Connect with recruiters and expand your network'
-      ],
-      cta: 'Upload Your First Project',
-      ctaLink: `${process.env.CLIENT_URL}/student/projects/create`
-    },
-    Lecturer: {
-      greeting: 'Welcome to the Academic Excellence Platform!',
-      benefits: [
-        'Review and approve student project submissions',
-        'Provide valuable feedback to guide student development',
-        'Monitor student progress and innovation trends',
-        'Foster academic excellence through project evaluation',
-        'Connect students with industry opportunities'
-      ],
-      nextSteps: [
-        'Review pending project submissions',
-        'Set up your lecturer profile',
-        'Explore student projects and innovations',
-        'Provide constructive feedback to students'
-      ],
-      cta: 'View Pending Projects',
-      ctaLink: `${process.env.CLIENT_URL}/lecturer/projects/pending`
-    },
-    Recruiter: {
-      greeting: 'Welcome to Your Talent Discovery Platform!',
-      benefits: [
-        'Discover talented students with real-world projects',
-        'Access a curated portfolio of innovative student work',
-        'Connect directly with potential candidates',
-        'Filter projects by technology, category, and skills',
-        'Save time with verified academic credentials'
-      ],
-      nextSteps: [
-        'Complete your company profile',
-        'Browse student projects and portfolios',
-        'Use advanced filters to find the right talent',
-        'Connect with students for opportunities'
-      ],
-      cta: 'Explore Student Projects',
-      ctaLink: `${process.env.CLIENT_URL}/projects`
-    }
-  };
-
-  const content = roleContent[role] || roleContent.Student;
   
   // Try to send welcome email, but don't fail if it doesn't work
-  try {
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
